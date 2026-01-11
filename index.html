@@ -1,0 +1,1466 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🎵 Music Visualizer</title>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        :root {
+            --bg-primary: #0a0a0f;
+            --bg-secondary: #13131a;
+            --bg-card: rgba(255, 255, 255, 0.05);
+            --text-primary: #ffffff;
+            --text-secondary: #a0a0a0;
+            --accent: #8b5cf6;
+            --accent-glow: rgba(139, 92, 246, 0.5);
+            --border: rgba(255, 255, 255, 0.1);
+        }
+
+        .light-mode {
+            --bg-primary: #f5f5f7;
+            --bg-secondary: #ffffff;
+            --bg-card: rgba(0, 0, 0, 0.05);
+            --text-primary: #1a1a2e;
+            --text-secondary: #666666;
+            --accent: #7c3aed;
+            --accent-glow: rgba(124, 58, 237, 0.3);
+            --border: rgba(0, 0, 0, 0.1);
+        }
+
+        body {
+            font-family: 'Poppins', sans-serif;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            min-height: 100vh;
+            overflow-x: hidden;
+            transition: all 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        /* Animated Background */
+        .bg-animation {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: -1;
+            overflow: hidden;
+        }
+
+        .bg-animation::before {
+            content: '';
+            position: absolute;
+            top: -50%;
+            left: -50%;
+            width: 200%;
+            height: 200%;
+            background: radial-gradient(circle at 20% 80%, var(--accent-glow) 0%, transparent 50%),
+                        radial-gradient(circle at 80% 20%, rgba(236, 72, 153, 0.2) 0%, transparent 50%),
+                        radial-gradient(circle at 40% 40%, rgba(59, 130, 246, 0.2) 0%, transparent 50%);
+            animation: bgRotate 30s linear infinite;
+        }
+
+        @keyframes bgRotate {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+
+        /* Canvas */
+        #visualizer {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 0;
+        }
+
+        /* Header */
+        .header {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            z-index: 100;
+            padding: 20px 40px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: linear-gradient(to bottom, var(--bg-primary), transparent);
+        }
+
+        .logo {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            font-size: 1.5rem;
+            font-weight: 700;
+        }
+
+        .logo-icon {
+            width: 45px;
+            height: 45px;
+            background: linear-gradient(135deg, var(--accent), #ec4899);
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.5rem;
+            animation: pulse 2s ease-in-out infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { transform: scale(1); box-shadow: 0 0 20px var(--accent-glow); }
+            50% { transform: scale(1.05); box-shadow: 0 0 40px var(--accent-glow); }
+        }
+
+        .header-controls {
+            display: flex;
+            gap: 15px;
+        }
+
+        /* Toggle Button */
+        .toggle-btn {
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            border: 2px solid var(--border);
+            background: var(--bg-card);
+            backdrop-filter: blur(10px);
+            color: var(--text-primary);
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.3rem;
+            transition: all 0.3s ease;
+        }
+
+        .toggle-btn:hover {
+            background: var(--accent);
+            border-color: var(--accent);
+            transform: translateY(-3px);
+            box-shadow: 0 10px 30px var(--accent-glow);
+        }
+
+        /* Main Container */
+        .main-container {
+            position: relative;
+            z-index: 10;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 100px 40px 40px;
+        }
+
+        /* Upload Section */
+        .upload-section {
+            text-align: center;
+            margin-bottom: 40px;
+            animation: fadeInUp 0.8s ease;
+        }
+
+        @keyframes fadeInUp {
+            from {
+                opacity: 0;
+                transform: translateY(30px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .upload-title {
+            font-size: 3rem;
+            font-weight: 700;
+            margin-bottom: 10px;
+            background: linear-gradient(135deg, var(--text-primary), var(--accent));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .upload-subtitle {
+            color: var(--text-secondary);
+            font-size: 1.1rem;
+            margin-bottom: 30px;
+        }
+
+        .upload-buttons {
+            display: flex;
+            gap: 20px;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+
+        .upload-btn {
+            padding: 15px 35px;
+            border-radius: 50px;
+            border: none;
+            font-family: inherit;
+            font-size: 1rem;
+            font-weight: 500;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            transition: all 0.3s ease;
+        }
+
+        .upload-btn.primary {
+            background: linear-gradient(135deg, var(--accent), #ec4899);
+            color: white;
+            box-shadow: 0 10px 40px var(--accent-glow);
+        }
+
+        .upload-btn.primary:hover {
+            transform: translateY(-3px) scale(1.02);
+            box-shadow: 0 15px 50px var(--accent-glow);
+        }
+
+        .upload-btn.secondary {
+            background: var(--bg-card);
+            color: var(--text-primary);
+            border: 2px solid var(--border);
+            backdrop-filter: blur(10px);
+        }
+
+        .upload-btn.secondary:hover {
+            background: var(--accent);
+            border-color: var(--accent);
+            transform: translateY(-3px);
+        }
+
+        /* AI Demo Button - 特殊樣式 */
+        .upload-btn.ai-demo {
+            background: linear-gradient(135deg, #06b6d4, #10b981);
+            color: white;
+            box-shadow: 0 10px 40px rgba(6, 182, 212, 0.4);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .upload-btn.ai-demo::before {
+            content: '';
+            position: absolute;
+            top: -50%;
+            left: -50%;
+            width: 200%;
+            height: 200%;
+            background: linear-gradient(
+                45deg,
+                transparent,
+                rgba(255, 255, 255, 0.1),
+                transparent
+            );
+            animation: shimmer 3s infinite;
+        }
+
+        @keyframes shimmer {
+            0% { transform: translateX(-100%) rotate(45deg); }
+            100% { transform: translateX(100%) rotate(45deg); }
+        }
+
+        .upload-btn.ai-demo:hover {
+            transform: translateY(-3px) scale(1.02);
+            box-shadow: 0 15px 50px rgba(6, 182, 212, 0.5);
+        }
+
+        #audioFile {
+            display: none;
+        }
+
+        /* Controls Panel */
+        .controls-panel {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            padding: 25px 40px;
+            background: linear-gradient(to top, var(--bg-primary) 50%, transparent);
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+            z-index: 100;
+            opacity: 0;
+            transform: translateY(100%);
+            transition: all 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .controls-panel.active {
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+        /* Track Info */
+        .track-info {
+            display: flex;
+            align-items: center;
+            gap: 20px;
+        }
+
+        .track-art {
+            width: 60px;
+            height: 60px;
+            border-radius: 12px;
+            background: linear-gradient(135deg, var(--accent), #ec4899);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.5rem;
+            box-shadow: 0 5px 20px var(--accent-glow);
+            animation: pulse 2s ease-in-out infinite;
+        }
+
+        .track-art.ai-track {
+            background: linear-gradient(135deg, #06b6d4, #10b981);
+            box-shadow: 0 5px 20px rgba(6, 182, 212, 0.4);
+        }
+
+        .track-details h3 {
+            font-size: 1.1rem;
+            font-weight: 600;
+            margin-bottom: 5px;
+        }
+
+        .track-details p {
+            color: var(--text-secondary);
+            font-size: 0.9rem;
+        }
+
+        /* Progress Bar */
+        .progress-container {
+            flex: 1;
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+
+        .time {
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+            min-width: 45px;
+        }
+
+        .progress-bar {
+            flex: 1;
+            height: 6px;
+            background: var(--bg-card);
+            border-radius: 3px;
+            cursor: pointer;
+            overflow: hidden;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, var(--accent), #ec4899);
+            border-radius: 3px;
+            width: 0%;
+            transition: width 0.1s linear;
+        }
+
+        /* Playback Controls */
+        .playback-controls {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 20px;
+        }
+
+        .control-btn {
+            width: 45px;
+            height: 45px;
+            border-radius: 50%;
+            border: none;
+            background: var(--bg-card);
+            color: var(--text-primary);
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.2rem;
+            transition: all 0.3s ease;
+        }
+
+        .control-btn:hover {
+            background: var(--accent);
+            transform: scale(1.1);
+        }
+
+        .control-btn.play-pause {
+            width: 60px;
+            height: 60px;
+            background: linear-gradient(135deg, var(--accent), #ec4899);
+            font-size: 1.5rem;
+            box-shadow: 0 5px 25px var(--accent-glow);
+        }
+
+        .control-btn.play-pause:hover {
+            transform: scale(1.1);
+            box-shadow: 0 10px 35px var(--accent-glow);
+        }
+
+        /* Volume Control */
+        .volume-control {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .volume-slider {
+            width: 100px;
+            height: 6px;
+            -webkit-appearance: none;
+            background: var(--bg-card);
+            border-radius: 3px;
+            cursor: pointer;
+        }
+
+        .volume-slider::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 16px;
+            height: 16px;
+            background: var(--accent);
+            border-radius: 50%;
+            cursor: pointer;
+            box-shadow: 0 0 10px var(--accent-glow);
+        }
+
+        /* Visualization Selector */
+        .viz-selector {
+            position: fixed;
+            right: 30px;
+            top: 50%;
+            transform: translateY(-50%);
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            z-index: 100;
+            opacity: 0;
+            transition: opacity 0.5s ease;
+        }
+
+        .viz-selector.active {
+            opacity: 1;
+        }
+
+        .viz-btn {
+            width: 55px;
+            height: 55px;
+            border-radius: 15px;
+            border: 2px solid var(--border);
+            background: var(--bg-card);
+            backdrop-filter: blur(10px);
+            color: var(--text-primary);
+            cursor: pointer;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 3px;
+            font-size: 1.3rem;
+            transition: all 0.3s ease;
+        }
+
+        .viz-btn span {
+            font-size: 0.6rem;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+
+        .viz-btn:hover {
+            background: var(--accent);
+            border-color: var(--accent);
+            transform: scale(1.1) translateX(-5px);
+            box-shadow: 0 5px 25px var(--accent-glow);
+        }
+
+        .viz-btn:hover span {
+            opacity: 1;
+        }
+
+        .viz-btn.active {
+            background: var(--accent);
+            border-color: var(--accent);
+            box-shadow: 0 5px 25px var(--accent-glow);
+        }
+
+        /* Color Selector */
+        .color-selector {
+            position: fixed;
+            left: 30px;
+            top: 50%;
+            transform: translateY(-50%);
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            z-index: 100;
+            opacity: 0;
+            transition: opacity 0.5s ease;
+        }
+
+        .color-selector.active {
+            opacity: 1;
+        }
+
+        .color-btn {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            border: 3px solid var(--border);
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .color-btn:hover {
+            transform: scale(1.2);
+            border-color: white;
+        }
+
+        .color-btn.active {
+            border-color: white;
+            box-shadow: 0 0 20px currentColor;
+        }
+
+        .color-btn.purple { background: linear-gradient(135deg, #8b5cf6, #ec4899); }
+        .color-btn.blue { background: linear-gradient(135deg, #3b82f6, #06b6d4); }
+        .color-btn.green { background: linear-gradient(135deg, #10b981, #84cc16); }
+        .color-btn.orange { background: linear-gradient(135deg, #f59e0b, #ef4444); }
+        .color-btn.rainbow { background: linear-gradient(135deg, #ef4444, #f59e0b, #84cc16, #06b6d4, #8b5cf6); }
+
+        /* Frequency Display */
+        .freq-display {
+            position: fixed;
+            top: 90px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            gap: 30px;
+            z-index: 100;
+            opacity: 0;
+            transition: opacity 0.5s ease;
+        }
+
+        .freq-display.active {
+            opacity: 1;
+        }
+
+        .freq-item {
+            text-align: center;
+            padding: 15px 25px;
+            background: var(--bg-card);
+            backdrop-filter: blur(10px);
+            border-radius: 15px;
+            border: 1px solid var(--border);
+        }
+
+        .freq-item .value {
+            font-size: 1.8rem;
+            font-weight: 700;
+            background: linear-gradient(135deg, var(--accent), #ec4899);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .freq-item .label {
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            .header {
+                padding: 15px 20px;
+            }
+
+            .logo {
+                font-size: 1.2rem;
+            }
+
+            .upload-title {
+                font-size: 2rem;
+            }
+
+            .upload-buttons {
+                flex-direction: column;
+                align-items: center;
+            }
+
+            .controls-panel {
+                padding: 20px;
+            }
+
+            .viz-selector, .color-selector {
+                display: none;
+            }
+
+            .freq-display {
+                gap: 10px;
+            }
+
+            .freq-item {
+                padding: 10px 15px;
+            }
+
+            .freq-item .value {
+                font-size: 1.2rem;
+            }
+        }
+
+        /* Particles */
+        .particle {
+            position: fixed;
+            pointer-events: none;
+            border-radius: 50%;
+            animation: floatParticle 4s ease-in-out infinite;
+        }
+
+        @keyframes floatParticle {
+            0%, 100% { transform: translateY(0) rotate(0deg); opacity: 0.6; }
+            50% { transform: translateY(-20px) rotate(180deg); opacity: 1; }
+        }
+
+        /* Loading Animation */
+        .loading {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            z-index: 200;
+            display: none;
+            flex-direction: column;
+            align-items: center;
+            gap: 15px;
+        }
+
+        .loading.active {
+            display: flex;
+        }
+
+        .loading-spinner {
+            width: 60px;
+            height: 60px;
+            border: 4px solid var(--border);
+            border-top-color: var(--accent);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        .loading-text {
+            color: var(--text-secondary);
+            font-size: 0.9rem;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        /* Error Toast */
+        .toast {
+            position: fixed;
+            bottom: 100px;
+            left: 50%;
+            transform: translateX(-50%) translateY(100px);
+            background: #ef4444;
+            color: white;
+            padding: 15px 30px;
+            border-radius: 10px;
+            font-size: 0.9rem;
+            z-index: 300;
+            opacity: 0;
+            transition: all 0.3s ease;
+        }
+
+        .toast.show {
+            opacity: 1;
+            transform: translateX(-50%) translateY(0);
+        }
+    </style>
+</head>
+<body>
+    <!-- Animated Background -->
+    <div class="bg-animation"></div>
+
+    <!-- Canvas -->
+    <canvas id="visualizer"></canvas>
+
+    <!-- Header -->
+    <header class="header">
+        <div class="logo">
+            <div class="logo-icon">🎵</div>
+            <span>Music Visualizer</span>
+        </div>
+        <div class="header-controls">
+            <button class="toggle-btn" id="themeToggle" title="Toggle Theme">🌙</button>
+        </div>
+    </header>
+
+    <!-- Frequency Display -->
+    <div class="freq-display" id="freqDisplay">
+        <div class="freq-item">
+            <div class="value" id="bassValue">0</div>
+            <div class="label">Bass</div>
+        </div>
+        <div class="freq-item">
+            <div class="value" id="midValue">0</div>
+            <div class="label">Mid</div>
+        </div>
+        <div class="freq-item">
+            <div class="value" id="trebleValue">0</div>
+            <div class="label">Treble</div>
+        </div>
+    </div>
+
+    <!-- Visualization Selector -->
+    <div class="viz-selector" id="vizSelector">
+        <button class="viz-btn active" data-viz="bars" title="Bars">
+            📊
+            <span>Bars</span>
+        </button>
+        <button class="viz-btn" data-viz="wave" title="Wave">
+            🌊
+            <span>Wave</span>
+        </button>
+        <button class="viz-btn" data-viz="circle" title="Circle">
+            ⭕
+            <span>Circle</span>
+        </button>
+        <button class="viz-btn" data-viz="particles" title="Particles">
+            ✨
+            <span>Stars</span>
+        </button>
+        <button class="viz-btn" data-viz="galaxy" title="Galaxy">
+            🌀
+            <span>Galaxy</span>
+        </button>
+        <button class="viz-btn" data-viz="dna" title="DNA">
+            🧬
+            <span>DNA</span>
+        </button>
+    </div>
+
+    <!-- Color Selector -->
+    <div class="color-selector" id="colorSelector">
+        <button class="color-btn purple active" data-color="purple"></button>
+        <button class="color-btn blue" data-color="blue"></button>
+        <button class="color-btn green" data-color="green"></button>
+        <button class="color-btn orange" data-color="orange"></button>
+        <button class="color-btn rainbow" data-color="rainbow"></button>
+    </div>
+
+    <!-- Main Container -->
+    <main class="main-container" id="mainContainer">
+        <section class="upload-section">
+            <h1 class="upload-title">Visualize Your Music</h1>
+            <p class="upload-subtitle">Upload a track, use your microphone, or try our AI demo</p>
+            <div class="upload-buttons">
+                <label for="audioFile" class="upload-btn primary">
+                    📁 Choose File
+                </label>
+                <input type="file" id="audioFile" accept="audio/*">
+                <button class="upload-btn secondary" id="micBtn">
+                    🎤 Use Microphone
+                </button>
+                <button class="upload-btn ai-demo" id="aiDemoBtn">
+                    🤖 AI Music Demo
+                </button>
+            </div>
+        </section>
+    </main>
+
+    <!-- Controls Panel -->
+    <div class="controls-panel" id="controlsPanel">
+        <div class="progress-container">
+            <span class="time" id="currentTime">0:00</span>
+            <div class="progress-bar" id="progressBar">
+                <div class="progress-fill" id="progressFill"></div>
+            </div>
+            <span class="time" id="duration">0:00</span>
+        </div>
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+            <div class="track-info">
+                <div class="track-art" id="trackArt">🎵</div>
+                <div class="track-details">
+                    <h3 id="trackName">No Track</h3>
+                    <p id="trackArtist">Select a file to play</p>
+                </div>
+            </div>
+            <div class="playback-controls">
+                <button class="control-btn" id="shuffleBtn">🔀</button>
+                <button class="control-btn" id="prevBtn">⏮</button>
+                <button class="control-btn play-pause" id="playPauseBtn">▶</button>
+                <button class="control-btn" id="nextBtn">⏭</button>
+                <button class="control-btn" id="repeatBtn">🔁</button>
+            </div>
+            <div class="volume-control">
+                <span>🔊</span>
+                <input type="range" class="volume-slider" id="volumeSlider" min="0" max="100" value="75">
+            </div>
+        </div>
+    </div>
+
+    <!-- Loading -->
+    <div class="loading" id="loading">
+        <div class="loading-spinner"></div>
+        <div class="loading-text">Loading AI Music...</div>
+    </div>
+
+    <!-- Toast for errors -->
+    <div class="toast" id="toast"></div>
+
+    <script>
+        // DOM Elements
+        const canvas = document.getElementById('visualizer');
+        const ctx = canvas.getContext('2d');
+        const audioFile = document.getElementById('audioFile');
+        const micBtn = document.getElementById('micBtn');
+        const aiDemoBtn = document.getElementById('aiDemoBtn');
+        const playPauseBtn = document.getElementById('playPauseBtn');
+        const volumeSlider = document.getElementById('volumeSlider');
+        const progressBar = document.getElementById('progressBar');
+        const progressFill = document.getElementById('progressFill');
+        const currentTimeEl = document.getElementById('currentTime');
+        const durationEl = document.getElementById('duration');
+        const trackName = document.getElementById('trackName');
+        const trackArt = document.getElementById('trackArt');
+        const themeToggle = document.getElementById('themeToggle');
+        const controlsPanel = document.getElementById('controlsPanel');
+        const vizSelector = document.getElementById('vizSelector');
+        const colorSelector = document.getElementById('colorSelector');
+        const freqDisplay = document.getElementById('freqDisplay');
+        const mainContainer = document.getElementById('mainContainer');
+        const loading = document.getElementById('loading');
+        const toast = document.getElementById('toast');
+
+        // Audio Context
+        let audioContext;
+        let analyser;
+        let source;
+        let audio;
+        let dataArray;
+        let isPlaying = false;
+        let isMic = false;
+        let isAiDemo = false;
+        let currentViz = 'bars';
+        let currentColor = 'purple';
+        let animationId;
+
+        // Color Palettes
+        const colorPalettes = {
+            purple: ['#8b5cf6', '#a78bfa', '#c4b5fd', '#ec4899', '#f472b6'],
+            blue: ['#3b82f6', '#60a5fa', '#93c5fd', '#06b6d4', '#22d3ee'],
+            green: ['#10b981', '#34d399', '#6ee7b7', '#84cc16', '#a3e635'],
+            orange: ['#f59e0b', '#fbbf24', '#fcd34d', '#ef4444', '#f87171'],
+            rainbow: ['#ef4444', '#f59e0b', '#84cc16', '#06b6d4', '#8b5cf6', '#ec4899']
+        };
+
+        // Show Toast Message
+        function showToast(message, duration = 3000) {
+            toast.textContent = message;
+            toast.classList.add('show');
+            setTimeout(() => {
+                toast.classList.remove('show');
+            }, duration);
+        }
+
+        // Initialize Canvas
+        function initCanvas() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+        }
+
+        window.addEventListener('resize', initCanvas);
+        initCanvas();
+
+        // Initialize Audio Context
+        function initAudio() {
+            if (!audioContext) {
+                audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                analyser = audioContext.createAnalyser();
+                analyser.fftSize = 512;
+                dataArray = new Uint8Array(analyser.frequencyBinCount);
+            }
+        }
+
+        // Common function to play audio file
+        async function playAudioFile(audioSource, fileName, artistName, isDemo = false) {
+            initAudio();
+            
+            if (audio) {
+                audio.pause();
+                if (source) source.disconnect();
+            }
+
+            audio = new Audio();
+            audio.crossOrigin = "anonymous";
+            audio.src = audioSource;
+            
+            // Show loading
+            loading.classList.add('active');
+
+            try {
+                // Wait for audio to be ready
+                await new Promise((resolve, reject) => {
+                    audio.addEventListener('canplaythrough', resolve, { once: true });
+                    audio.addEventListener('error', (e) => {
+                        reject(new Error('Failed to load audio file'));
+                    }, { once: true });
+                    
+                    // Timeout after 10 seconds
+                    setTimeout(() => reject(new Error('Loading timeout')), 10000);
+                });
+
+                source = audioContext.createMediaElementSource(audio);
+                source.connect(analyser);
+                analyser.connect(audioContext.destination);
+
+                durationEl.textContent = formatTime(audio.duration);
+                trackName.textContent = fileName;
+                document.getElementById('trackArtist').textContent = artistName;
+                
+                // Update track art style
+                if (isDemo) {
+                    trackArt.classList.add('ai-track');
+                    trackArt.textContent = '🤖';
+                } else {
+                    trackArt.classList.remove('ai-track');
+                    trackArt.textContent = '🎵';
+                }
+
+                audio.addEventListener('timeupdate', updateProgress);
+                audio.addEventListener('ended', () => {
+                    isPlaying = false;
+                    playPauseBtn.textContent = '▶';
+                });
+
+                showControls();
+                isMic = false;
+                isAiDemo = isDemo;
+                
+                await audio.play();
+                await audioContext.resume();
+                
+                isPlaying = true;
+                playPauseBtn.textContent = '⏸';
+                playPauseBtn.disabled = false;
+                animate();
+
+            } catch (error) {
+                console.error('Audio loading error:', error);
+                showToast('❌ Failed to load audio: ' + error.message);
+            } finally {
+                loading.classList.remove('active');
+            }
+        }
+
+        // Handle File Upload
+        audioFile.addEventListener('change', async (e) => {
+            const file = e.target.files[0];
+            if (file) {
+                const audioSource = URL.createObjectURL(file);
+                const fileName = file.name.replace(/\.[^/.]+$/, "");
+                await playAudioFile(audioSource, fileName, 'Local File', false);
+            }
+        });
+
+        // Handle AI Demo Button
+        aiDemoBtn.addEventListener('click', async () => {
+            await playAudioFile('music.mp3', 'AI Generated Music', 'AI Demo', true);
+        });
+
+        // Handle Microphone
+        micBtn.addEventListener('click', async () => {
+            initAudio();
+            
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                
+                if (audio) {
+                    audio.pause();
+                }
+                if (source) {
+                    source.disconnect();
+                }
+
+                source = audioContext.createMediaStreamSource(stream);
+                source.connect(analyser);
+
+                trackName.textContent = 'Microphone Input';
+                document.getElementById('trackArtist').textContent = 'Live Audio';
+                trackArt.classList.remove('ai-track');
+                trackArt.textContent = '🎤';
+                
+                showControls();
+                isMic = true;
+                isAiDemo = false;
+                isPlaying = true;
+                playPauseBtn.textContent = '🎤';
+                playPauseBtn.disabled = true;
+                
+                audioContext.resume();
+                animate();
+            } catch (err) {
+                showToast('❌ Microphone access denied');
+            }
+        });
+
+        // Show Controls
+        function showControls() {
+            mainContainer.style.opacity = '0';
+            setTimeout(() => {
+                mainContainer.style.display = 'none';
+            }, 300);
+            controlsPanel.classList.add('active');
+            vizSelector.classList.add('active');
+            colorSelector.classList.add('active');
+            freqDisplay.classList.add('active');
+        }
+
+        // Play/Pause
+        playPauseBtn.addEventListener('click', () => {
+            if (isMic) return;
+            
+            if (isPlaying) {
+                audio.pause();
+                playPauseBtn.textContent = '▶';
+            } else {
+                audio.play();
+                audioContext.resume();
+                playPauseBtn.textContent = '⏸';
+            }
+            isPlaying = !isPlaying;
+        });
+
+        // Volume Control
+        volumeSlider.addEventListener('input', (e) => {
+            if (audio) {
+                audio.volume = e.target.value / 100;
+            }
+        });
+
+        // Progress Bar
+        progressBar.addEventListener('click', (e) => {
+            if (audio && !isMic) {
+                const rect = progressBar.getBoundingClientRect();
+                const percent = (e.clientX - rect.left) / rect.width;
+                audio.currentTime = percent * audio.duration;
+            }
+        });
+
+        function updateProgress() {
+            if (audio) {
+                const percent = (audio.currentTime / audio.duration) * 100;
+                progressFill.style.width = percent + '%';
+                currentTimeEl.textContent = formatTime(audio.currentTime);
+            }
+        }
+
+        function formatTime(seconds) {
+            const mins = Math.floor(seconds / 60);
+            const secs = Math.floor(seconds % 60);
+            return `${mins}:${secs.toString().padStart(2, '0')}`;
+        }
+
+        // Theme Toggle
+        themeToggle.addEventListener('click', () => {
+            document.body.classList.toggle('light-mode');
+            themeToggle.textContent = document.body.classList.contains('light-mode') ? '☀️' : '🌙';
+        });
+
+        // Visualization Selector
+        vizSelector.addEventListener('click', (e) => {
+            const btn = e.target.closest('.viz-btn');
+            if (btn) {
+                document.querySelectorAll('.viz-btn').forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                currentViz = btn.dataset.viz;
+            }
+        });
+
+        // Color Selector
+        colorSelector.addEventListener('click', (e) => {
+            const btn = e.target.closest('.color-btn');
+            if (btn) {
+                document.querySelectorAll('.color-btn').forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                currentColor = btn.dataset.color;
+            }
+        });
+
+        // Get Color
+        function getColor(index, total) {
+            const palette = colorPalettes[currentColor];
+            if (currentColor === 'rainbow') {
+                return palette[index % palette.length];
+            }
+            const colorIndex = Math.floor((index / total) * palette.length);
+            return palette[Math.min(colorIndex, palette.length - 1)];
+        }
+
+        // Animation
+        function animate() {
+            animationId = requestAnimationFrame(animate);
+            
+            analyser.getByteFrequencyData(dataArray);
+            
+            // Update frequency display
+            const bass = Math.round(average(dataArray.slice(0, 10)));
+            const mid = Math.round(average(dataArray.slice(10, 100)));
+            const treble = Math.round(average(dataArray.slice(100)));
+            
+            document.getElementById('bassValue').textContent = bass;
+            document.getElementById('midValue').textContent = mid;
+            document.getElementById('trebleValue').textContent = treble;
+            
+            // Clear canvas with fade effect
+            ctx.fillStyle = document.body.classList.contains('light-mode') 
+                ? 'rgba(245, 245, 247, 0.2)' 
+                : 'rgba(10, 10, 15, 0.2)';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            
+            // Draw visualization
+            switch (currentViz) {
+                case 'bars':
+                    drawBars();
+                    break;
+                case 'wave':
+                    drawWave();
+                    break;
+                case 'circle':
+                    drawCircle();
+                    break;
+                case 'particles':
+                    drawParticles();
+                    break;
+                case 'galaxy':
+                    drawGalaxy();
+                    break;
+                case 'dna':
+                    drawDNA();
+                    break;
+            }
+        }
+
+        function average(arr) {
+            return arr.reduce((a, b) => a + b, 0) / arr.length;
+        }
+
+        // Visualization: Bars
+        function drawBars() {
+            const barCount = 64;
+            const barWidth = canvas.width / barCount;
+            const heightScale = canvas.height / 300;
+            
+            for (let i = 0; i < barCount; i++) {
+                const value = dataArray[i * 2] || 0;
+                const barHeight = value * heightScale;
+                const x = i * barWidth;
+                const y = canvas.height - barHeight;
+                
+                const gradient = ctx.createLinearGradient(x, y, x, canvas.height);
+                gradient.addColorStop(0, getColor(i, barCount));
+                gradient.addColorStop(1, 'transparent');
+                
+                ctx.fillStyle = gradient;
+                ctx.beginPath();
+                ctx.roundRect(x + 2, y, barWidth - 4, barHeight, [5, 5, 0, 0]);
+                ctx.fill();
+                
+                // Reflection
+                ctx.fillStyle = getColor(i, barCount) + '30';
+                ctx.beginPath();
+                ctx.roundRect(x + 2, canvas.height, barWidth - 4, -barHeight * 0.3, [0, 0, 5, 5]);
+                ctx.fill();
+            }
+        }
+
+        // Visualization: Wave
+        function drawWave() {
+            ctx.lineWidth = 3;
+            
+            for (let wave = 0; wave < 3; wave++) {
+                ctx.beginPath();
+                ctx.strokeStyle = getColor(wave, 3) + (wave === 0 ? 'ff' : '80');
+                
+                for (let i = 0; i < dataArray.length; i++) {
+                    const x = (i / dataArray.length) * canvas.width;
+                    const value = dataArray[i] / 255;
+                    const y = canvas.height / 2 + Math.sin(i * 0.05 + wave) * value * 200;
+                    
+                    if (i === 0) {
+                        ctx.moveTo(x, y);
+                    } else {
+                        ctx.lineTo(x, y);
+                    }
+                }
+                ctx.stroke();
+            }
+        }
+
+        // Visualization: Circle
+        let circleRotation = 0;
+        function drawCircle() {
+            const centerX = canvas.width / 2;
+            const centerY = canvas.height / 2;
+            const baseRadius = Math.min(canvas.width, canvas.height) * 0.25;
+            
+            circleRotation += 0.005;
+            
+            // Inner glow
+            const avgValue = average(dataArray) / 255;
+            const gradient = ctx.createRadialGradient(centerX, centerY, 0, centerX, centerY, baseRadius * (1 + avgValue));
+            gradient.addColorStop(0, getColor(0, 5) + '50');
+            gradient.addColorStop(1, 'transparent');
+            ctx.fillStyle = gradient;
+            ctx.beginPath();
+            ctx.arc(centerX, centerY, baseRadius * (1 + avgValue), 0, Math.PI * 2);
+            ctx.fill();
+            
+            // Bars around circle
+            const barCount = 128;
+            for (let i = 0; i < barCount; i++) {
+                const angle = (i / barCount) * Math.PI * 2 + circleRotation;
+                const value = dataArray[i % dataArray.length] / 255;
+                const barHeight = value * 150 + 20;
+                
+                const x1 = centerX + Math.cos(angle) * baseRadius;
+                const y1 = centerY + Math.sin(angle) * baseRadius;
+                const x2 = centerX + Math.cos(angle) * (baseRadius + barHeight);
+                const y2 = centerY + Math.sin(angle) * (baseRadius + barHeight);
+                
+                ctx.beginPath();
+                ctx.strokeStyle = getColor(i, barCount);
+                ctx.lineWidth = 3;
+                ctx.lineCap = 'round';
+                ctx.moveTo(x1, y1);
+                ctx.lineTo(x2, y2);
+                ctx.stroke();
+            }
+        }
+
+        // Visualization: Particles
+        const particles = [];
+        function drawParticles() {
+            const avgValue = average(dataArray) / 255;
+            
+            // Add new particles
+            if (avgValue > 0.3) {
+                for (let i = 0; i < Math.floor(avgValue * 5); i++) {
+                    particles.push({
+                        x: canvas.width / 2,
+                        y: canvas.height / 2,
+                        vx: (Math.random() - 0.5) * avgValue * 20,
+                        vy: (Math.random() - 0.5) * avgValue * 20,
+                        size: Math.random() * 5 + 2,
+                        color: getColor(Math.floor(Math.random() * 5), 5),
+                        life: 1
+                    });
+                }
+            }
+            
+            // Update and draw particles
+            for (let i = particles.length - 1; i >= 0; i--) {
+                const p = particles[i];
+                p.x += p.vx;
+                p.y += p.vy;
+                p.life -= 0.01;
+                p.size *= 0.99;
+                
+                if (p.life <= 0 || p.size < 0.5) {
+                    particles.splice(i, 1);
+                    continue;
+                }
+                
+                ctx.beginPath();
+                ctx.fillStyle = p.color + Math.floor(p.life * 255).toString(16).padStart(2, '0');
+                ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+                ctx.fill();
+                
+                // Glow
+                ctx.shadowBlur = 20;
+                ctx.shadowColor = p.color;
+                ctx.fill();
+                ctx.shadowBlur = 0;
+            }
+            
+            // Limit particles
+            if (particles.length > 500) {
+                particles.splice(0, particles.length - 500);
+            }
+        }
+
+        // Visualization: Galaxy
+        let galaxyRotation = 0;
+        function drawGalaxy() {
+            const centerX = canvas.width / 2;
+            const centerY = canvas.height / 2;
+            const avgValue = average(dataArray) / 255;
+            
+            galaxyRotation += 0.002 + avgValue * 0.01;
+            
+            const arms = 4;
+            const pointsPerArm = 100;
+            
+            for (let arm = 0; arm < arms; arm++) {
+                const armAngle = (arm / arms) * Math.PI * 2;
+                
+                for (let i = 0; i < pointsPerArm; i++) {
+                    const distance = (i / pointsPerArm) * Math.min(canvas.width, canvas.height) * 0.4;
+                    const angle = armAngle + galaxyRotation + (i * 0.1);
+                    const value = dataArray[i % dataArray.length] / 255;
+                    
+                    const x = centerX + Math.cos(angle) * distance;
+                    const y = centerY + Math.sin(angle) * distance * 0.6;
+                    const size = (1 - i / pointsPerArm) * 5 * (1 + value);
+                    
+                    ctx.beginPath();
+                    ctx.fillStyle = getColor(i, pointsPerArm);
+                    ctx.arc(x, y, size, 0, Math.PI * 2);
+                    ctx.fill();
+                    
+                    // Add extra brightness for high values
+                    if (value > 0.5) {
+                        ctx.shadowBlur = 15;
+                        ctx.shadowColor = getColor(i, pointsPerArm);
+                        ctx.fill();
+                        ctx.shadowBlur = 0;
+                    }
+                }
+            }
+            
+            // Center glow
+            const centerGradient = ctx.createRadialGradient(centerX, centerY, 0, centerX, centerY, 100);
+            centerGradient.addColorStop(0, getColor(0, 5) + '80');
+            centerGradient.addColorStop(1, 'transparent');
+            ctx.fillStyle = centerGradient;
+            ctx.beginPath();
+            ctx.arc(centerX, centerY, 100 * (1 + avgValue), 0, Math.PI * 2);
+            ctx.fill();
+        }
+
+        // Visualization: DNA
+        let dnaOffset = 0;
+        function drawDNA() {
+            const centerX = canvas.width / 2;
+            const points = 50;
+            const amplitude = 150;
+            const spacing = canvas.height / points;
+            
+            dnaOffset += 0.05;
+            
+            for (let i = 0; i < points; i++) {
+                const y = i * spacing;
+                const value = dataArray[i * 2] / 255;
+                const wave = Math.sin(i * 0.3 + dnaOffset) * amplitude * (1 + value * 0.5);
+                
+                const x1 = centerX + wave;
+                const x2 = centerX - wave;
+                const size = 8 + value * 15;
+                
+                // Strand 1
+                ctx.beginPath();
+                ctx.fillStyle = getColor(i, points);
+                ctx.arc(x1, y, size, 0, Math.PI * 2);
+                ctx.fill();
+                
+                // Strand 2
+                ctx.beginPath();
+                ctx.fillStyle = getColor(points - i, points);
+                ctx.arc(x2, y, size, 0, Math.PI * 2);
+                ctx.fill();
+                
+                // Connection
+                if (i % 3 === 0) {
+                    ctx.beginPath();
+                    ctx.strokeStyle = getColor(i, points) + '50';
+                    ctx.lineWidth = 2;
+                    ctx.moveTo(x1, y);
+                    ctx.lineTo(x2, y);
+                    ctx.stroke();
+                }
+                
+                // Glow effect
+                ctx.shadowBlur = 20;
+                ctx.shadowColor = getColor(i, points);
+            }
+            ctx.shadowBlur = 0;
+        }
+
+        // Keyboard shortcuts
+        document.addEventListener('keydown', (e) => {
+            switch(e.code) {
+                case 'Space':
+                    e.preventDefault();
+                    if (!isMic && audio) playPauseBtn.click();
+                    break;
+                case 'ArrowUp':
+                    volumeSlider.value = Math.min(100, parseInt(volumeSlider.value) + 10);
+                    volumeSlider.dispatchEvent(new Event('input'));
+                    break;
+                case 'ArrowDown':
+                    volumeSlider.value = Math.max(0, parseInt(volumeSlider.value) - 10);
+                    volumeSlider.dispatchEvent(new Event('input'));
+                    break;
+            }
+        });
+
+        // Create ambient particles
+        function createAmbientParticles() {
+            for (let i = 0; i < 20; i++) {
+                const particle = document.createElement('div');
+                particle.className = 'particle';
+                particle.style.left = Math.random() * 100 + '%';
+                particle.style.top = Math.random() * 100 + '%';
+                particle.style.width = Math.random() * 10 + 5 + 'px';
+                particle.style.height = particle.style.width;
+                particle.style.background = colorPalettes.purple[Math.floor(Math.random() * 5)];
+                particle.style.animationDelay = Math.random() * 4 + 's';
+                particle.style.animationDuration = (Math.random() * 4 + 4) + 's';
+                document.body.appendChild(particle);
+            }
+        }
+
+        createAmbientParticles();
+
+        // Initial idle animation
+        function idleAnimation() {
+            if (!isPlaying) {
+                ctx.fillStyle = document.body.classList.contains('light-mode') 
+                    ? 'rgba(245, 245, 247, 0.1)' 
+                    : 'rgba(10, 10, 15, 0.1)';
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+                
+                const time = Date.now() * 0.001;
+                const centerX = canvas.width / 2;
+                const centerY = canvas.height / 2;
+                
+                for (let i = 0; i < 5; i++) {
+                    const radius = 100 + i * 30 + Math.sin(time + i) * 20;
+                    ctx.beginPath();
+                    ctx.strokeStyle = colorPalettes.purple[i] + '30';
+                    ctx.lineWidth = 2;
+                    ctx.arc(centerX, centerY, radius, 0, Math.PI * 2);
+                    ctx.stroke();
+                }
+                
+                requestAnimationFrame(idleAnimation);
+            }
+        }
+        
+        idleAnimation();
+    </script>
+</body>
+</html>
