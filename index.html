@@ -765,7 +765,7 @@
     <main class="main-container" id="mainContainer">
         <section class="upload-section">
             <h1 class="upload-title">Visualize Your Music</h1>
-            <p class="upload-subtitle">Upload a track, use your microphone, or try our AI demo</p>
+            <p class="upload-subtitle">Upload a track, use your microphone, or try "Like A Flash" AI demo</p>
             <div class="upload-buttons">
                 <label for="audioFile" class="upload-btn primary">
                     📁 Choose File
@@ -775,7 +775,7 @@
                     🎤 Use Microphone
                 </button>
                 <button class="upload-btn ai-demo" id="aiDemoBtn">
-                    🤖 AI Music Demo
+                    🤖 Play "Like A Flash"
                 </button>
             </div>
         </section>
@@ -978,7 +978,12 @@
 
         // Handle AI Demo Button
         aiDemoBtn.addEventListener('click', async () => {
-            await playAudioFile('music.mp3', 'AI Generated Music', 'AI Demo', true);
+            await playAudioFile(
+                'music.mp3', 
+                'Like A Flash',                           // 歌曲名稱
+                '瞿健博 KOI KIN POK WILSON · Mureka.ai',  // 藝人 · 來源
+                true
+            );
         });
 
         // Handle Microphone
@@ -1463,4 +1468,5 @@
         idleAnimation();
     </script>
 </body>
+
 </html>
