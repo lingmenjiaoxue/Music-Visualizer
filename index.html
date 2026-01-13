@@ -312,7 +312,7 @@
             box-shadow: 0 15px 50px rgba(6, 182, 212, 0.5);
         }
 
-        #audioFile, #videoFile {
+        #audioFile, #videoFile, #videoFilePlayer {
             display: none;
         }
 
@@ -616,23 +616,27 @@
             letter-spacing: 1px;
         }
 
-        /* Video Control Button */
-        .video-control-btn {
+        /* Video Control Buttons */
+        .video-control-btns {
             position: fixed;
             top: 90px;
             right: 30px;
             z-index: 100;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
             opacity: 0;
             pointer-events: none;
             transition: opacity 0.5s ease;
         }
 
-        .video-control-btn.active {
+        .video-control-btns.active {
             opacity: 1;
             pointer-events: auto;
         }
 
-        .video-control-btn button {
+        .video-control-btns button,
+        .video-control-btns label {
             padding: 10px 20px;
             border-radius: 25px;
             border: 2px solid var(--border);
@@ -644,14 +648,25 @@
             font-size: 0.9rem;
             display: flex;
             align-items: center;
+            justify-content: center;
             gap: 8px;
             transition: all 0.3s ease;
         }
 
-        .video-control-btn button:hover {
+        .video-control-btns button:hover,
+        .video-control-btns label:hover {
             background: var(--accent);
             border-color: var(--accent);
             transform: translateY(-2px);
+        }
+
+        .video-control-btns .set-video-btn {
+            background: linear-gradient(135deg, #f59e0b, #ef4444);
+            border: none;
+        }
+
+        .video-control-btns .set-video-btn:hover {
+            box-shadow: 0 5px 20px rgba(245, 158, 11, 0.4);
         }
 
         /* Responsive */
@@ -806,9 +821,13 @@
         </div>
     </div>
 
-    <!-- Video Control Button -->
-    <div class="video-control-btn" id="videoControlBtn">
-        <button id="clearVideoBtn">🎬 Clear Video Background</button>
+    <!-- Video Control Buttons -->
+    <div class="video-control-btns" id="videoControlBtns">
+        <label for="videoFilePlayer" class="set-video-btn">
+            🎬 Change Video
+        </label>
+        <input type="file" id="videoFilePlayer" accept="video/*">
+        <button id="clearVideoBtn">❌ Clear Video</button>
     </div>
 
     <!-- Visualization Selector -->
@@ -918,6 +937,7 @@
         const ctx = canvas.getContext('2d');
         const audioFile = document.getElementById('audioFile');
         const videoFile = document.getElementById('videoFile');
+        const videoFilePlayer = document.getElementById('videoFilePlayer');
         const bgVideo = document.getElementById('bgVideo');
         const bgAnimation = document.getElementById('bgAnimation');
         const micBtn = document.getElementById('micBtn');
@@ -938,7 +958,7 @@
         const mainContainer = document.getElementById('mainContainer');
         const loading = document.getElementById('loading');
         const toast = document.getElementById('toast');
-        const videoControlBtn = document.getElementById('videoControlBtn');
+        const videoControlBtns = document.getElementById('videoControlBtns');
         const clearVideoBtn = document.getElementById('clearVideoBtn');
 
         // Audio Context
@@ -954,6 +974,7 @@
         let currentColor = 'purple';
         let animationId;
         let hasVideoBackground = false;
+        let videoSource = null; // Store the video source URL
 
         // Color Palettes
         const colorPalettes = {
@@ -993,26 +1014,49 @@
             }
         }
 
-        // Handle Video Background Upload
+        // Handle Video Background Upload (Home screen - just prepares video, doesn't play)
         videoFile.addEventListener('change', (e) => {
             const file = e.target.files[0];
             if (file) {
-                const videoSource = URL.createObjectURL(file);
-                setVideoBackground(videoSource);
-                showToast('✅ Video background set!', 3000, true);
+                videoSource = URL.createObjectURL(file);
+                setVideoBackground(videoSource, false); // Don't auto-play
+                showToast('✅ Video background set! It will play when audio starts.', 3000, true);
+            }
+        });
+
+        // Handle Video Background Upload (Player screen - can auto-play if audio is playing)
+        videoFilePlayer.addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (file) {
+                videoSource = URL.createObjectURL(file);
+                setVideoBackground(videoSource, isPlaying); // Play if audio is playing
+                showToast('✅ Video background changed!', 3000, true);
             }
         });
 
         // Set Video Background
-        function setVideoBackground(src) {
+        function setVideoBackground(src, shouldPlay = false) {
+            videoSource = src;
             bgVideo.src = src;
-            bgVideo.classList.add('active');
-            bgAnimation.classList.add('hidden');
-            bgVideo.play().catch(err => {
-                console.log('Video autoplay blocked:', err);
-            });
-            hasVideoBackground = true;
-            videoControlBtn.classList.add('active');
+            bgVideo.load();
+            
+            bgVideo.onloadeddata = () => {
+                bgVideo.classList.add('active');
+                bgAnimation.classList.add('hidden');
+                hasVideoBackground = true;
+                videoControlBtns.classList.add('active');
+                
+                if (shouldPlay) {
+                    bgVideo.play().catch(err => {
+                        console.log('Video autoplay blocked:', err);
+                    });
+                }
+            };
+            
+            bgVideo.onerror = () => {
+                showToast('❌ Failed to load video');
+                hasVideoBackground = false;
+            };
         }
 
         // Clear Video Background
@@ -1027,7 +1071,24 @@
             bgVideo.classList.remove('active');
             bgAnimation.classList.remove('hidden');
             hasVideoBackground = false;
-            videoControlBtn.classList.remove('active');
+            videoSource = null;
+            // Only hide buttons if we're not in player mode
+            if (!controlsPanel.classList.contains('active')) {
+                videoControlBtns.classList.remove('active');
+            }
+        }
+
+        // Sync video with audio playback
+        function syncVideoWithAudio(play) {
+            if (hasVideoBackground && bgVideo.src) {
+                if (play) {
+                    bgVideo.play().catch(err => {
+                        console.log('Video play blocked:', err);
+                    });
+                } else {
+                    bgVideo.pause();
+                }
+            }
         }
 
         // Clear canvas function - handles transparency for video background
@@ -1045,7 +1106,7 @@
         }
 
         // Common function to play audio file
-        async function playAudioFile(audioSource, fileName, artistName, isDemo = false, playVideo = false) {
+        async function playAudioFile(audioSource, fileName, artistName, isDemo = false, videoPath = null) {
             initAudio();
             
             if (audio) {
@@ -1061,6 +1122,11 @@
             loading.classList.add('active');
 
             try {
+                // If videoPath is provided, load the video first
+                if (videoPath) {
+                    await loadVideo(videoPath);
+                }
+
                 // Wait for audio to be ready
                 await new Promise((resolve, reject) => {
                     audio.addEventListener('canplaythrough', resolve, { once: true });
@@ -1093,12 +1159,8 @@
                 audio.addEventListener('ended', () => {
                     isPlaying = false;
                     playPauseBtn.textContent = '▶';
+                    syncVideoWithAudio(false);
                 });
-
-                // If playVideo is true, load and play video.mp4
-                if (playVideo) {
-                    setVideoBackground('video.mp4');
-                }
 
                 showControls();
                 isMic = false;
@@ -1110,6 +1172,10 @@
                 isPlaying = true;
                 playPauseBtn.textContent = '⏸';
                 playPauseBtn.disabled = false;
+                
+                // Start video playback when audio starts
+                syncVideoWithAudio(true);
+                
                 animate();
 
             } catch (error) {
@@ -1120,13 +1186,50 @@
             }
         }
 
+        // Load video helper function
+        function loadVideo(videoPath) {
+            return new Promise((resolve, reject) => {
+                videoSource = videoPath;
+                bgVideo.src = videoPath;
+                bgVideo.load();
+                
+                const onLoaded = () => {
+                    bgVideo.classList.add('active');
+                    bgAnimation.classList.add('hidden');
+                    hasVideoBackground = true;
+                    videoControlBtns.classList.add('active');
+                    bgVideo.removeEventListener('loadeddata', onLoaded);
+                    bgVideo.removeEventListener('error', onError);
+                    resolve();
+                };
+                
+                const onError = () => {
+                    bgVideo.removeEventListener('loadeddata', onLoaded);
+                    bgVideo.removeEventListener('error', onError);
+                    // Don't reject, just continue without video
+                    console.log('Video not found, continuing without video background');
+                    resolve();
+                };
+                
+                bgVideo.addEventListener('loadeddata', onLoaded);
+                bgVideo.addEventListener('error', onError);
+                
+                // Timeout - don't wait forever for video
+                setTimeout(() => {
+                    bgVideo.removeEventListener('loadeddata', onLoaded);
+                    bgVideo.removeEventListener('error', onError);
+                    resolve();
+                }, 5000);
+            });
+        }
+
         // Handle File Upload
         audioFile.addEventListener('change', async (e) => {
             const file = e.target.files[0];
             if (file) {
                 const audioSource = URL.createObjectURL(file);
                 const fileName = file.name.replace(/\.[^/.]+$/, "");
-                await playAudioFile(audioSource, fileName, 'Local File', false, false);
+                await playAudioFile(audioSource, fileName, 'Local File', false, null);
             }
         });
 
@@ -1137,7 +1240,7 @@
                 'Like A Flash',                           // 歌曲名稱
                 '瞿健博 KOI KIN POK WILSON · Mureka.ai',  // 藝人 · 來源
                 true,
-                true  // Play video.mp4 as background
+                'video.mp4'  // Load video.mp4 as background
             );
         });
 
@@ -1170,6 +1273,9 @@
                 playPauseBtn.textContent = '🎤';
                 playPauseBtn.disabled = true;
                 
+                // Start video if set
+                syncVideoWithAudio(true);
+                
                 audioContext.resume();
                 animate();
             } catch (err) {
@@ -1187,9 +1293,7 @@
             vizSelector.classList.add('active');
             colorSelector.classList.add('active');
             freqDisplay.classList.add('active');
-            if (hasVideoBackground) {
-                videoControlBtn.classList.add('active');
-            }
+            videoControlBtns.classList.add('active');
         }
 
         // Play/Pause
@@ -1198,12 +1302,12 @@
             
             if (isPlaying) {
                 audio.pause();
-                if (hasVideoBackground) bgVideo.pause();
+                syncVideoWithAudio(false);
                 playPauseBtn.textContent = '▶';
             } else {
                 audio.play();
                 audioContext.resume();
-                if (hasVideoBackground) bgVideo.play();
+                syncVideoWithAudio(true);
                 playPauseBtn.textContent = '⏸';
             }
             isPlaying = !isPlaying;
