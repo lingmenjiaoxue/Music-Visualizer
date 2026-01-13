@@ -277,7 +277,7 @@
             box-shadow: 0 15px 50px rgba(245, 158, 11, 0.5);
         }
 
-        /* AI Demo Button - 特殊樣式 */
+        /* AI Demo Button */
         .upload-btn.ai-demo {
             background: linear-gradient(135deg, #06b6d4, #10b981);
             color: white;
@@ -310,6 +310,12 @@
         .upload-btn.ai-demo:hover {
             transform: translateY(-3px) scale(1.02);
             box-shadow: 0 15px 50px rgba(6, 182, 212, 0.5);
+        }
+
+        .upload-btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none !important;
         }
 
         #audioFile, #videoFile, #videoFilePlayer {
@@ -752,6 +758,7 @@
         .loading-text {
             color: var(--text-secondary);
             font-size: 0.9rem;
+            text-align: center;
         }
 
         @keyframes spin {
@@ -785,7 +792,7 @@
     </style>
 </head>
 <body>
-    <!-- Video Background (behind everything) -->
+    <!-- Video Background -->
     <video id="bgVideo" class="bg-video" loop muted playsinline></video>
 
     <!-- Animated Background -->
@@ -925,10 +932,10 @@
     <!-- Loading -->
     <div class="loading" id="loading">
         <div class="loading-spinner"></div>
-        <div class="loading-text">Loading AI Music...</div>
+        <div class="loading-text" id="loadingText">Loading...</div>
     </div>
 
-    <!-- Toast for errors -->
+    <!-- Toast -->
     <div class="toast" id="toast"></div>
 
     <script>
@@ -957,6 +964,7 @@
         const freqDisplay = document.getElementById('freqDisplay');
         const mainContainer = document.getElementById('mainContainer');
         const loading = document.getElementById('loading');
+        const loadingText = document.getElementById('loadingText');
         const toast = document.getElementById('toast');
         const videoControlBtns = document.getElementById('videoControlBtns');
         const clearVideoBtn = document.getElementById('clearVideoBtn');
@@ -974,7 +982,8 @@
         let currentColor = 'purple';
         let animationId;
         let hasVideoBackground = false;
-        let videoSource = null; // Store the video source URL
+        let videoSource = null;
+        let isLoading = false;
 
         // Color Palettes
         const colorPalettes = {
@@ -985,14 +994,17 @@
             rainbow: ['#ef4444', '#f59e0b', '#84cc16', '#06b6d4', '#8b5cf6', '#ec4899']
         };
 
-        // Show Toast Message
+        // Show Toast
         function showToast(message, duration = 3000, isSuccess = false) {
             toast.textContent = message;
             toast.classList.toggle('success', isSuccess);
             toast.classList.add('show');
-            setTimeout(() => {
-                toast.classList.remove('show');
-            }, duration);
+            setTimeout(() => toast.classList.remove('show'), duration);
+        }
+
+        // Set Loading Text
+        function setLoadingText(text) {
+            loadingText.textContent = text;
         }
 
         // Initialize Canvas
@@ -1000,69 +1012,88 @@
             canvas.width = window.innerWidth;
             canvas.height = window.innerHeight;
         }
-
         window.addEventListener('resize', initCanvas);
         initCanvas();
 
-        // Initialize Audio Context
-        function initAudio() {
+        // Initialize Audio Context - MUST be called on user gesture
+        async function initAudioContext() {
             if (!audioContext) {
                 audioContext = new (window.AudioContext || window.webkitAudioContext)();
                 analyser = audioContext.createAnalyser();
                 analyser.fftSize = 512;
                 dataArray = new Uint8Array(analyser.frequencyBinCount);
             }
+            
+            // Resume if suspended (required after user gesture)
+            if (audioContext.state === 'suspended') {
+                await audioContext.resume();
+            }
+            
+            return audioContext;
         }
 
-        // Handle Video Background Upload (Home screen - just prepares video, doesn't play)
+        // Video Background Handlers
         videoFile.addEventListener('change', (e) => {
             const file = e.target.files[0];
             if (file) {
                 videoSource = URL.createObjectURL(file);
-                setVideoBackground(videoSource, false); // Don't auto-play
-                showToast('✅ Video background set! It will play when audio starts.', 3000, true);
+                prepareVideoBackground(videoSource);
+                showToast('✅ Video set! Will play with audio.', 3000, true);
             }
         });
 
-        // Handle Video Background Upload (Player screen - can auto-play if audio is playing)
         videoFilePlayer.addEventListener('change', (e) => {
             const file = e.target.files[0];
             if (file) {
                 videoSource = URL.createObjectURL(file);
-                setVideoBackground(videoSource, isPlaying); // Play if audio is playing
+                setVideoBackground(videoSource, isPlaying);
                 showToast('✅ Video background changed!', 3000, true);
             }
         });
 
-        // Set Video Background
-        function setVideoBackground(src, shouldPlay = false) {
+        function prepareVideoBackground(src) {
             videoSource = src;
             bgVideo.src = src;
             bgVideo.load();
-            
             bgVideo.onloadeddata = () => {
                 bgVideo.classList.add('active');
                 bgAnimation.classList.add('hidden');
                 hasVideoBackground = true;
                 videoControlBtns.classList.add('active');
-                
-                if (shouldPlay) {
-                    bgVideo.play().catch(err => {
-                        console.log('Video autoplay blocked:', err);
-                    });
-                }
-            };
-            
-            bgVideo.onerror = () => {
-                showToast('❌ Failed to load video');
-                hasVideoBackground = false;
+                bgVideo.pause();
+                bgVideo.currentTime = 0;
             };
         }
 
-        // Clear Video Background
+        function setVideoBackground(src, shouldPlay = false) {
+            videoSource = src;
+            bgVideo.src = src;
+            bgVideo.load();
+            bgVideo.onloadeddata = () => {
+                bgVideo.classList.add('active');
+                bgAnimation.classList.add('hidden');
+                hasVideoBackground = true;
+                videoControlBtns.classList.add('active');
+                if (shouldPlay) bgVideo.play().catch(() => {});
+            };
+        }
+
+        function loadVideoAsync(videoPath) {
+            bgVideo.src = videoPath;
+            bgVideo.load();
+            bgVideo.onloadeddata = () => {
+                bgVideo.classList.add('active');
+                bgAnimation.classList.add('hidden');
+                hasVideoBackground = true;
+                videoControlBtns.classList.add('active');
+                if (isPlaying) bgVideo.play().catch(() => {});
+            };
+            bgVideo.onerror = () => console.log('Video not found');
+        }
+
         clearVideoBtn.addEventListener('click', () => {
             clearVideoBackground();
-            showToast('✅ Video background cleared!', 3000, true);
+            showToast('✅ Video cleared!', 3000, true);
         });
 
         function clearVideoBackground() {
@@ -1072,32 +1103,18 @@
             bgAnimation.classList.remove('hidden');
             hasVideoBackground = false;
             videoSource = null;
-            // Only hide buttons if we're not in player mode
-            if (!controlsPanel.classList.contains('active')) {
-                videoControlBtns.classList.remove('active');
-            }
         }
 
-        // Sync video with audio playback
         function syncVideoWithAudio(play) {
             if (hasVideoBackground && bgVideo.src) {
-                if (play) {
-                    bgVideo.play().catch(err => {
-                        console.log('Video play blocked:', err);
-                    });
-                } else {
-                    bgVideo.pause();
-                }
+                play ? bgVideo.play().catch(() => {}) : bgVideo.pause();
             }
         }
 
-        // Clear canvas function - handles transparency for video background
         function clearCanvas() {
             if (hasVideoBackground) {
-                // Clear to transparent when video background is active
                 ctx.clearRect(0, 0, canvas.width, canvas.height);
             } else {
-                // Use semi-transparent fill for trail effect when no video
                 ctx.fillStyle = document.body.classList.contains('light-mode') 
                     ? 'rgba(245, 245, 247, 0.2)' 
                     : 'rgba(10, 10, 15, 0.2)';
@@ -1105,48 +1122,94 @@
             }
         }
 
-        // Common function to play audio file
+        // Main audio playback function
         async function playAudioFile(audioSource, fileName, artistName, isDemo = false, videoPath = null) {
-            initAudio();
+            if (isLoading) return;
+            isLoading = true;
             
-            if (audio) {
-                audio.pause();
-                if (source) source.disconnect();
-            }
-
-            audio = new Audio();
-            audio.crossOrigin = "anonymous";
-            audio.src = audioSource;
-            
-            // Show loading
+            // Show loading immediately
             loading.classList.add('active');
+            setLoadingText('Initializing...');
+            
+            if (isDemo) aiDemoBtn.disabled = true;
 
             try {
-                // If videoPath is provided, load the video first
-                if (videoPath) {
-                    await loadVideo(videoPath);
+                // Step 1: Initialize AudioContext first (requires user gesture)
+                setLoadingText('Starting audio engine...');
+                await initAudioContext();
+                
+                // Step 2: Clean up previous audio
+                if (audio) {
+                    audio.pause();
+                    audio.src = '';
+                }
+                if (source) {
+                    try { source.disconnect(); } catch(e) {}
+                    source = null;
                 }
 
-                // Wait for audio to be ready
+                // Step 3: Create new audio element
+                audio = new Audio();
+                audio.crossOrigin = "anonymous";
+                audio.preload = "auto";
+                
+                // Step 4: Load video in background (non-blocking)
+                if (videoPath) {
+                    loadVideoAsync(videoPath);
+                }
+
+                // Step 5: Set up audio loading with promise
+                setLoadingText('Loading audio file...');
+                
                 await new Promise((resolve, reject) => {
-                    audio.addEventListener('canplaythrough', resolve, { once: true });
-                    audio.addEventListener('error', (e) => {
-                        reject(new Error('Failed to load audio file'));
-                    }, { once: true });
+                    const onCanPlay = () => {
+                        cleanup();
+                        resolve();
+                    };
                     
-                    // Timeout after 10 seconds
-                    setTimeout(() => reject(new Error('Loading timeout')), 10000);
+                    const onError = (e) => {
+                        cleanup();
+                        const error = audio.error;
+                        let msg = 'Failed to load audio';
+                        if (error) {
+                            switch(error.code) {
+                                case 1: msg = 'Audio loading aborted'; break;
+                                case 2: msg = 'Network error loading audio'; break;
+                                case 3: msg = 'Audio decoding error'; break;
+                                case 4: msg = 'Audio file not found or format not supported'; break;
+                            }
+                        }
+                        reject(new Error(msg));
+                    };
+                    
+                    const cleanup = () => {
+                        audio.removeEventListener('canplay', onCanPlay);
+                        audio.removeEventListener('canplaythrough', onCanPlay);
+                        audio.removeEventListener('loadeddata', onCanPlay);
+                        audio.removeEventListener('error', onError);
+                    };
+
+                    audio.addEventListener('canplay', onCanPlay);
+                    audio.addEventListener('canplaythrough', onCanPlay);
+                    audio.addEventListener('loadeddata', onCanPlay);
+                    audio.addEventListener('error', onError);
+                    
+                    // Set source and start loading
+                    audio.src = audioSource;
+                    audio.load();
                 });
 
+                // Step 6: Connect to audio context
+                setLoadingText('Connecting visualizer...');
                 source = audioContext.createMediaElementSource(audio);
                 source.connect(analyser);
                 analyser.connect(audioContext.destination);
 
+                // Step 7: Update UI
                 durationEl.textContent = formatTime(audio.duration);
                 trackName.textContent = fileName;
                 document.getElementById('trackArtist').textContent = artistName;
                 
-                // Update track art style
                 if (isDemo) {
                     trackArt.classList.add('ai-track');
                     trackArt.textContent = '🤖';
@@ -1162,68 +1225,32 @@
                     syncVideoWithAudio(false);
                 });
 
+                // Step 8: Start playback
+                setLoadingText('Starting playback...');
+                audio.volume = volumeSlider.value / 100;
+                await audio.play();
+                
                 showControls();
                 isMic = false;
                 isAiDemo = isDemo;
-                
-                await audio.play();
-                await audioContext.resume();
-                
                 isPlaying = true;
                 playPauseBtn.textContent = '⏸';
                 playPauseBtn.disabled = false;
                 
-                // Start video playback when audio starts
                 syncVideoWithAudio(true);
-                
                 animate();
 
             } catch (error) {
-                console.error('Audio loading error:', error);
-                showToast('❌ Failed to load audio: ' + error.message);
+                console.error('Playback error:', error);
+                showToast('❌ ' + error.message);
             } finally {
                 loading.classList.remove('active');
+                isLoading = false;
+                if (isDemo) aiDemoBtn.disabled = false;
             }
         }
 
-        // Load video helper function
-        function loadVideo(videoPath) {
-            return new Promise((resolve, reject) => {
-                videoSource = videoPath;
-                bgVideo.src = videoPath;
-                bgVideo.load();
-                
-                const onLoaded = () => {
-                    bgVideo.classList.add('active');
-                    bgAnimation.classList.add('hidden');
-                    hasVideoBackground = true;
-                    videoControlBtns.classList.add('active');
-                    bgVideo.removeEventListener('loadeddata', onLoaded);
-                    bgVideo.removeEventListener('error', onError);
-                    resolve();
-                };
-                
-                const onError = () => {
-                    bgVideo.removeEventListener('loadeddata', onLoaded);
-                    bgVideo.removeEventListener('error', onError);
-                    // Don't reject, just continue without video
-                    console.log('Video not found, continuing without video background');
-                    resolve();
-                };
-                
-                bgVideo.addEventListener('loadeddata', onLoaded);
-                bgVideo.addEventListener('error', onError);
-                
-                // Timeout - don't wait forever for video
-                setTimeout(() => {
-                    bgVideo.removeEventListener('loadeddata', onLoaded);
-                    bgVideo.removeEventListener('error', onError);
-                    resolve();
-                }, 5000);
-            });
-        }
-
-        // Handle File Upload
+        // File upload handler
         audioFile.addEventListener('change', async (e) => {
             const file = e.target.files[0];
             if (file) {
@@ -1233,29 +1260,30 @@
             }
         });
 
-        // Handle AI Demo Button - Now also plays video.mp4
+        // AI Demo button handler
         aiDemoBtn.addEventListener('click', async () => {
             await playAudioFile(
                 'music.mp3', 
-                'Like A Flash',                           // 歌曲名稱
-                '瞿健博 KOI KIN POK WILSON · Mureka.ai',  // 藝人 · 來源
+                'Like A Flash',
+                '瞿健博 KOI KIN POK WILSON · Mureka.ai',
                 true,
-                'video.mp4'  // Load video.mp4 as background
+                'video.mp4'
             );
         });
 
-        // Handle Microphone
+        // Microphone handler
         micBtn.addEventListener('click', async () => {
-            initAudio();
-            
             try {
+                await initAudioContext();
+                
                 const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
                 
                 if (audio) {
                     audio.pause();
+                    audio.src = '';
                 }
                 if (source) {
-                    source.disconnect();
+                    try { source.disconnect(); } catch(e) {}
                 }
 
                 source = audioContext.createMediaStreamSource(stream);
@@ -1273,10 +1301,7 @@
                 playPauseBtn.textContent = '🎤';
                 playPauseBtn.disabled = true;
                 
-                // Start video if set
                 syncVideoWithAudio(true);
-                
-                audioContext.resume();
                 animate();
             } catch (err) {
                 showToast('❌ Microphone access denied');
@@ -1286,9 +1311,7 @@
         // Show Controls
         function showControls() {
             mainContainer.style.opacity = '0';
-            setTimeout(() => {
-                mainContainer.style.display = 'none';
-            }, 300);
+            setTimeout(() => mainContainer.style.display = 'none', 300);
             controlsPanel.classList.add('active');
             vizSelector.classList.add('active');
             colorSelector.classList.add('active');
@@ -1306,18 +1329,16 @@
                 playPauseBtn.textContent = '▶';
             } else {
                 audio.play();
-                audioContext.resume();
+                if (audioContext.state === 'suspended') audioContext.resume();
                 syncVideoWithAudio(true);
                 playPauseBtn.textContent = '⏸';
             }
             isPlaying = !isPlaying;
         });
 
-        // Volume Control
+        // Volume
         volumeSlider.addEventListener('input', (e) => {
-            if (audio) {
-                audio.volume = e.target.value / 100;
-            }
+            if (audio) audio.volume = e.target.value / 100;
         });
 
         // Progress Bar
@@ -1326,8 +1347,6 @@
                 const rect = progressBar.getBoundingClientRect();
                 const percent = (e.clientX - rect.left) / rect.width;
                 audio.currentTime = percent * audio.duration;
-                
-                // Sync video with audio if video is playing
                 if (hasVideoBackground && bgVideo.duration) {
                     bgVideo.currentTime = (percent * audio.duration) % bgVideo.duration;
                 }
@@ -1335,7 +1354,7 @@
         });
 
         function updateProgress() {
-            if (audio) {
+            if (audio && audio.duration) {
                 const percent = (audio.currentTime / audio.duration) * 100;
                 progressFill.style.width = percent + '%';
                 currentTimeEl.textContent = formatTime(audio.currentTime);
@@ -1343,6 +1362,7 @@
         }
 
         function formatTime(seconds) {
+            if (!seconds || isNaN(seconds)) return '0:00';
             const mins = Math.floor(seconds / 60);
             const secs = Math.floor(seconds % 60);
             return `${mins}:${secs.toString().padStart(2, '0')}`;
@@ -1374,54 +1394,32 @@
             }
         });
 
-        // Get Color
         function getColor(index, total) {
             const palette = colorPalettes[currentColor];
-            if (currentColor === 'rainbow') {
-                return palette[index % palette.length];
-            }
+            if (currentColor === 'rainbow') return palette[index % palette.length];
             const colorIndex = Math.floor((index / total) * palette.length);
             return palette[Math.min(colorIndex, palette.length - 1)];
         }
 
-        // Animation
+        // Animation Loop
         function animate() {
             animationId = requestAnimationFrame(animate);
             
             analyser.getByteFrequencyData(dataArray);
             
-            // Update frequency display
-            const bass = Math.round(average(dataArray.slice(0, 10)));
-            const mid = Math.round(average(dataArray.slice(10, 100)));
-            const treble = Math.round(average(dataArray.slice(100)));
+            document.getElementById('bassValue').textContent = Math.round(average(dataArray.slice(0, 10)));
+            document.getElementById('midValue').textContent = Math.round(average(dataArray.slice(10, 100)));
+            document.getElementById('trebleValue').textContent = Math.round(average(dataArray.slice(100)));
             
-            document.getElementById('bassValue').textContent = bass;
-            document.getElementById('midValue').textContent = mid;
-            document.getElementById('trebleValue').textContent = treble;
-            
-            // Clear canvas appropriately based on video background
             clearCanvas();
             
-            // Draw visualization
             switch (currentViz) {
-                case 'bars':
-                    drawBars();
-                    break;
-                case 'wave':
-                    drawWave();
-                    break;
-                case 'circle':
-                    drawCircle();
-                    break;
-                case 'particles':
-                    drawParticles();
-                    break;
-                case 'galaxy':
-                    drawGalaxy();
-                    break;
-                case 'dna':
-                    drawDNA();
-                    break;
+                case 'bars': drawBars(); break;
+                case 'wave': drawWave(); break;
+                case 'circle': drawCircle(); break;
+                case 'particles': drawParticles(); break;
+                case 'galaxy': drawGalaxy(); break;
+                case 'dna': drawDNA(); break;
             }
         }
 
@@ -1429,7 +1427,7 @@
             return arr.reduce((a, b) => a + b, 0) / arr.length;
         }
 
-        // Visualization: Bars
+        // Visualizations
         function drawBars() {
             const barCount = 64;
             const barWidth = canvas.width / barCount;
@@ -1450,7 +1448,6 @@
                 ctx.roundRect(x + 2, y, barWidth - 4, barHeight, [5, 5, 0, 0]);
                 ctx.fill();
                 
-                // Reflection
                 ctx.fillStyle = getColor(i, barCount) + '30';
                 ctx.beginPath();
                 ctx.roundRect(x + 2, canvas.height, barWidth - 4, -barHeight * 0.3, [0, 0, 5, 5]);
@@ -1458,39 +1455,28 @@
             }
         }
 
-        // Visualization: Wave
         function drawWave() {
             ctx.lineWidth = 3;
-            
             for (let wave = 0; wave < 3; wave++) {
                 ctx.beginPath();
                 ctx.strokeStyle = getColor(wave, 3) + (wave === 0 ? 'ff' : '80');
-                
                 for (let i = 0; i < dataArray.length; i++) {
                     const x = (i / dataArray.length) * canvas.width;
                     const value = dataArray[i] / 255;
                     const y = canvas.height / 2 + Math.sin(i * 0.05 + wave) * value * 200;
-                    
-                    if (i === 0) {
-                        ctx.moveTo(x, y);
-                    } else {
-                        ctx.lineTo(x, y);
-                    }
+                    i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
                 }
                 ctx.stroke();
             }
         }
 
-        // Visualization: Circle
         let circleRotation = 0;
         function drawCircle() {
             const centerX = canvas.width / 2;
             const centerY = canvas.height / 2;
             const baseRadius = Math.min(canvas.width, canvas.height) * 0.25;
-            
             circleRotation += 0.005;
             
-            // Inner glow
             const avgValue = average(dataArray) / 255;
             const gradient = ctx.createRadialGradient(centerX, centerY, 0, centerX, centerY, baseRadius * (1 + avgValue));
             gradient.addColorStop(0, getColor(0, 5) + '50');
@@ -1500,13 +1486,11 @@
             ctx.arc(centerX, centerY, baseRadius * (1 + avgValue), 0, Math.PI * 2);
             ctx.fill();
             
-            // Bars around circle
             const barCount = 128;
             for (let i = 0; i < barCount; i++) {
                 const angle = (i / barCount) * Math.PI * 2 + circleRotation;
                 const value = dataArray[i % dataArray.length] / 255;
                 const barHeight = value * 150 + 20;
-                
                 const x1 = centerX + Math.cos(angle) * baseRadius;
                 const y1 = centerY + Math.sin(angle) * baseRadius;
                 const x2 = centerX + Math.cos(angle) * (baseRadius + barHeight);
@@ -1522,12 +1506,10 @@
             }
         }
 
-        // Visualization: Particles
         const particles = [];
         function drawParticles() {
             const avgValue = average(dataArray) / 255;
             
-            // Add new particles
             if (avgValue > 0.3) {
                 for (let i = 0; i < Math.floor(avgValue * 5); i++) {
                     particles.push({
@@ -1542,7 +1524,6 @@
                 }
             }
             
-            // Update and draw particles
             for (let i = particles.length - 1; i >= 0; i--) {
                 const p = particles[i];
                 p.x += p.vx;
@@ -1559,60 +1540,46 @@
                 ctx.fillStyle = p.color + Math.floor(p.life * 255).toString(16).padStart(2, '0');
                 ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
                 ctx.fill();
-                
-                // Glow
                 ctx.shadowBlur = 20;
                 ctx.shadowColor = p.color;
                 ctx.fill();
                 ctx.shadowBlur = 0;
             }
             
-            // Limit particles
-            if (particles.length > 500) {
-                particles.splice(0, particles.length - 500);
-            }
+            if (particles.length > 500) particles.splice(0, particles.length - 500);
         }
 
-        // Visualization: Galaxy
         let galaxyRotation = 0;
         function drawGalaxy() {
             const centerX = canvas.width / 2;
             const centerY = canvas.height / 2;
             const avgValue = average(dataArray) / 255;
-            
             galaxyRotation += 0.002 + avgValue * 0.01;
             
-            const arms = 4;
-            const pointsPerArm = 100;
-            
-            for (let arm = 0; arm < arms; arm++) {
-                const armAngle = (arm / arms) * Math.PI * 2;
-                
-                for (let i = 0; i < pointsPerArm; i++) {
-                    const distance = (i / pointsPerArm) * Math.min(canvas.width, canvas.height) * 0.4;
+            for (let arm = 0; arm < 4; arm++) {
+                const armAngle = (arm / 4) * Math.PI * 2;
+                for (let i = 0; i < 100; i++) {
+                    const distance = (i / 100) * Math.min(canvas.width, canvas.height) * 0.4;
                     const angle = armAngle + galaxyRotation + (i * 0.1);
                     const value = dataArray[i % dataArray.length] / 255;
-                    
                     const x = centerX + Math.cos(angle) * distance;
                     const y = centerY + Math.sin(angle) * distance * 0.6;
-                    const size = (1 - i / pointsPerArm) * 5 * (1 + value);
+                    const size = (1 - i / 100) * 5 * (1 + value);
                     
                     ctx.beginPath();
-                    ctx.fillStyle = getColor(i, pointsPerArm);
+                    ctx.fillStyle = getColor(i, 100);
                     ctx.arc(x, y, size, 0, Math.PI * 2);
                     ctx.fill();
                     
-                    // Add extra brightness for high values
                     if (value > 0.5) {
                         ctx.shadowBlur = 15;
-                        ctx.shadowColor = getColor(i, pointsPerArm);
+                        ctx.shadowColor = getColor(i, 100);
                         ctx.fill();
                         ctx.shadowBlur = 0;
                     }
                 }
             }
             
-            // Center glow
             const centerGradient = ctx.createRadialGradient(centerX, centerY, 0, centerX, centerY, 100);
             centerGradient.addColorStop(0, getColor(0, 5) + '80');
             centerGradient.addColorStop(1, 'transparent');
@@ -1622,38 +1589,32 @@
             ctx.fill();
         }
 
-        // Visualization: DNA
         let dnaOffset = 0;
         function drawDNA() {
             const centerX = canvas.width / 2;
             const points = 50;
             const amplitude = 150;
             const spacing = canvas.height / points;
-            
             dnaOffset += 0.05;
             
             for (let i = 0; i < points; i++) {
                 const y = i * spacing;
                 const value = dataArray[i * 2] / 255;
                 const wave = Math.sin(i * 0.3 + dnaOffset) * amplitude * (1 + value * 0.5);
-                
                 const x1 = centerX + wave;
                 const x2 = centerX - wave;
                 const size = 8 + value * 15;
                 
-                // Strand 1
                 ctx.beginPath();
                 ctx.fillStyle = getColor(i, points);
                 ctx.arc(x1, y, size, 0, Math.PI * 2);
                 ctx.fill();
                 
-                // Strand 2
                 ctx.beginPath();
                 ctx.fillStyle = getColor(points - i, points);
                 ctx.arc(x2, y, size, 0, Math.PI * 2);
                 ctx.fill();
                 
-                // Connection
                 if (i % 3 === 0) {
                     ctx.beginPath();
                     ctx.strokeStyle = getColor(i, points) + '50';
@@ -1663,7 +1624,6 @@
                     ctx.stroke();
                 }
                 
-                // Glow effect
                 ctx.shadowBlur = 20;
                 ctx.shadowColor = getColor(i, points);
             }
@@ -1703,15 +1663,12 @@
                 document.body.appendChild(particle);
             }
         }
-
         createAmbientParticles();
 
-        // Initial idle animation
+        // Idle animation
         function idleAnimation() {
             if (!isPlaying) {
-                // Clear canvas appropriately
                 clearCanvas();
-                
                 const time = Date.now() * 0.001;
                 const centerX = canvas.width / 2;
                 const centerY = canvas.height / 2;
@@ -1724,11 +1681,9 @@
                     ctx.arc(centerX, centerY, radius, 0, Math.PI * 2);
                     ctx.stroke();
                 }
-                
                 requestAnimationFrame(idleAnimation);
             }
         }
-        
         idleAnimation();
     </script>
 </body>
