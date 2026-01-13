@@ -50,8 +50,14 @@
             left: 0;
             width: 100%;
             height: 100%;
-            z-index: -1;
+            z-index: 1;
             overflow: hidden;
+            transition: opacity 0.5s ease;
+        }
+
+        .bg-animation.hidden {
+            opacity: 0;
+            pointer-events: none;
         }
 
         .bg-animation::before {
@@ -72,6 +78,23 @@
             to { transform: rotate(360deg); }
         }
 
+        /* Video Background */
+        .bg-video {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            z-index: 0;
+            opacity: 0;
+            transition: opacity 0.5s ease;
+        }
+
+        .bg-video.active {
+            opacity: 1;
+        }
+
         /* Canvas */
         #visualizer {
             position: fixed;
@@ -79,7 +102,8 @@
             left: 0;
             width: 100%;
             height: 100%;
-            z-index: 0;
+            z-index: 2;
+            pointer-events: none;
         }
 
         /* Header */
@@ -241,6 +265,18 @@
             transform: translateY(-3px);
         }
 
+        /* Video Background Button */
+        .upload-btn.video-bg {
+            background: linear-gradient(135deg, #f59e0b, #ef4444);
+            color: white;
+            box-shadow: 0 10px 40px rgba(245, 158, 11, 0.4);
+        }
+
+        .upload-btn.video-bg:hover {
+            transform: translateY(-3px) scale(1.02);
+            box-shadow: 0 15px 50px rgba(245, 158, 11, 0.5);
+        }
+
         /* AI Demo Button - 特殊樣式 */
         .upload-btn.ai-demo {
             background: linear-gradient(135deg, #06b6d4, #10b981);
@@ -276,7 +312,7 @@
             box-shadow: 0 15px 50px rgba(6, 182, 212, 0.5);
         }
 
-        #audioFile {
+        #audioFile, #videoFile {
             display: none;
         }
 
@@ -580,6 +616,44 @@
             letter-spacing: 1px;
         }
 
+        /* Video Control Button */
+        .video-control-btn {
+            position: fixed;
+            top: 90px;
+            right: 30px;
+            z-index: 100;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.5s ease;
+        }
+
+        .video-control-btn.active {
+            opacity: 1;
+            pointer-events: auto;
+        }
+
+        .video-control-btn button {
+            padding: 10px 20px;
+            border-radius: 25px;
+            border: 2px solid var(--border);
+            background: var(--bg-card);
+            backdrop-filter: blur(10px);
+            color: var(--text-primary);
+            cursor: pointer;
+            font-family: inherit;
+            font-size: 0.9rem;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            transition: all 0.3s ease;
+        }
+
+        .video-control-btn button:hover {
+            background: var(--accent);
+            border-color: var(--accent);
+            transform: translateY(-2px);
+        }
+
         /* Responsive */
         @media (max-width: 768px) {
             .header {
@@ -626,6 +700,7 @@
             pointer-events: none;
             border-radius: 50%;
             animation: floatParticle 4s ease-in-out infinite;
+            z-index: 3;
         }
 
         @keyframes floatParticle {
@@ -688,11 +763,18 @@
             opacity: 1;
             transform: translateX(-50%) translateY(0);
         }
+
+        .toast.success {
+            background: #10b981;
+        }
     </style>
 </head>
 <body>
+    <!-- Video Background (behind everything) -->
+    <video id="bgVideo" class="bg-video" loop muted playsinline></video>
+
     <!-- Animated Background -->
-    <div class="bg-animation"></div>
+    <div class="bg-animation" id="bgAnimation"></div>
 
     <!-- Canvas -->
     <canvas id="visualizer"></canvas>
@@ -722,6 +804,11 @@
             <div class="value" id="trebleValue">0</div>
             <div class="label">Treble</div>
         </div>
+    </div>
+
+    <!-- Video Control Button -->
+    <div class="video-control-btn" id="videoControlBtn">
+        <button id="clearVideoBtn">🎬 Clear Video Background</button>
     </div>
 
     <!-- Visualization Selector -->
@@ -768,7 +855,7 @@
             <p class="upload-subtitle">Upload a track, use your microphone, or try "Like A Flash" AI demo</p>
             <div class="upload-buttons">
                 <label for="audioFile" class="upload-btn primary">
-                    📁 Choose File
+                    📁 Choose Audio File
                 </label>
                 <input type="file" id="audioFile" accept="audio/*">
                 <button class="upload-btn secondary" id="micBtn">
@@ -777,6 +864,10 @@
                 <button class="upload-btn ai-demo" id="aiDemoBtn">
                     🤖 Play "Like A Flash"
                 </button>
+                <label for="videoFile" class="upload-btn video-bg">
+                    🎬 Set Video Background
+                </label>
+                <input type="file" id="videoFile" accept="video/*">
             </div>
         </section>
     </main>
@@ -826,6 +917,9 @@
         const canvas = document.getElementById('visualizer');
         const ctx = canvas.getContext('2d');
         const audioFile = document.getElementById('audioFile');
+        const videoFile = document.getElementById('videoFile');
+        const bgVideo = document.getElementById('bgVideo');
+        const bgAnimation = document.getElementById('bgAnimation');
         const micBtn = document.getElementById('micBtn');
         const aiDemoBtn = document.getElementById('aiDemoBtn');
         const playPauseBtn = document.getElementById('playPauseBtn');
@@ -844,6 +938,8 @@
         const mainContainer = document.getElementById('mainContainer');
         const loading = document.getElementById('loading');
         const toast = document.getElementById('toast');
+        const videoControlBtn = document.getElementById('videoControlBtn');
+        const clearVideoBtn = document.getElementById('clearVideoBtn');
 
         // Audio Context
         let audioContext;
@@ -857,6 +953,7 @@
         let currentViz = 'bars';
         let currentColor = 'purple';
         let animationId;
+        let hasVideoBackground = false;
 
         // Color Palettes
         const colorPalettes = {
@@ -868,8 +965,9 @@
         };
 
         // Show Toast Message
-        function showToast(message, duration = 3000) {
+        function showToast(message, duration = 3000, isSuccess = false) {
             toast.textContent = message;
+            toast.classList.toggle('success', isSuccess);
             toast.classList.add('show');
             setTimeout(() => {
                 toast.classList.remove('show');
@@ -895,8 +993,59 @@
             }
         }
 
+        // Handle Video Background Upload
+        videoFile.addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (file) {
+                const videoSource = URL.createObjectURL(file);
+                setVideoBackground(videoSource);
+                showToast('✅ Video background set!', 3000, true);
+            }
+        });
+
+        // Set Video Background
+        function setVideoBackground(src) {
+            bgVideo.src = src;
+            bgVideo.classList.add('active');
+            bgAnimation.classList.add('hidden');
+            bgVideo.play().catch(err => {
+                console.log('Video autoplay blocked:', err);
+            });
+            hasVideoBackground = true;
+            videoControlBtn.classList.add('active');
+        }
+
+        // Clear Video Background
+        clearVideoBtn.addEventListener('click', () => {
+            clearVideoBackground();
+            showToast('✅ Video background cleared!', 3000, true);
+        });
+
+        function clearVideoBackground() {
+            bgVideo.pause();
+            bgVideo.src = '';
+            bgVideo.classList.remove('active');
+            bgAnimation.classList.remove('hidden');
+            hasVideoBackground = false;
+            videoControlBtn.classList.remove('active');
+        }
+
+        // Clear canvas function - handles transparency for video background
+        function clearCanvas() {
+            if (hasVideoBackground) {
+                // Clear to transparent when video background is active
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+            } else {
+                // Use semi-transparent fill for trail effect when no video
+                ctx.fillStyle = document.body.classList.contains('light-mode') 
+                    ? 'rgba(245, 245, 247, 0.2)' 
+                    : 'rgba(10, 10, 15, 0.2)';
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+            }
+        }
+
         // Common function to play audio file
-        async function playAudioFile(audioSource, fileName, artistName, isDemo = false) {
+        async function playAudioFile(audioSource, fileName, artistName, isDemo = false, playVideo = false) {
             initAudio();
             
             if (audio) {
@@ -946,6 +1095,11 @@
                     playPauseBtn.textContent = '▶';
                 });
 
+                // If playVideo is true, load and play video.mp4
+                if (playVideo) {
+                    setVideoBackground('video.mp4');
+                }
+
                 showControls();
                 isMic = false;
                 isAiDemo = isDemo;
@@ -972,17 +1126,18 @@
             if (file) {
                 const audioSource = URL.createObjectURL(file);
                 const fileName = file.name.replace(/\.[^/.]+$/, "");
-                await playAudioFile(audioSource, fileName, 'Local File', false);
+                await playAudioFile(audioSource, fileName, 'Local File', false, false);
             }
         });
 
-        // Handle AI Demo Button
+        // Handle AI Demo Button - Now also plays video.mp4
         aiDemoBtn.addEventListener('click', async () => {
             await playAudioFile(
                 'music.mp3', 
                 'Like A Flash',                           // 歌曲名稱
                 '瞿健博 KOI KIN POK WILSON · Mureka.ai',  // 藝人 · 來源
-                true
+                true,
+                true  // Play video.mp4 as background
             );
         });
 
@@ -1032,6 +1187,9 @@
             vizSelector.classList.add('active');
             colorSelector.classList.add('active');
             freqDisplay.classList.add('active');
+            if (hasVideoBackground) {
+                videoControlBtn.classList.add('active');
+            }
         }
 
         // Play/Pause
@@ -1040,10 +1198,12 @@
             
             if (isPlaying) {
                 audio.pause();
+                if (hasVideoBackground) bgVideo.pause();
                 playPauseBtn.textContent = '▶';
             } else {
                 audio.play();
                 audioContext.resume();
+                if (hasVideoBackground) bgVideo.play();
                 playPauseBtn.textContent = '⏸';
             }
             isPlaying = !isPlaying;
@@ -1062,6 +1222,11 @@
                 const rect = progressBar.getBoundingClientRect();
                 const percent = (e.clientX - rect.left) / rect.width;
                 audio.currentTime = percent * audio.duration;
+                
+                // Sync video with audio if video is playing
+                if (hasVideoBackground && bgVideo.duration) {
+                    bgVideo.currentTime = (percent * audio.duration) % bgVideo.duration;
+                }
             }
         });
 
@@ -1130,11 +1295,8 @@
             document.getElementById('midValue').textContent = mid;
             document.getElementById('trebleValue').textContent = treble;
             
-            // Clear canvas with fade effect
-            ctx.fillStyle = document.body.classList.contains('light-mode') 
-                ? 'rgba(245, 245, 247, 0.2)' 
-                : 'rgba(10, 10, 15, 0.2)';
-            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            // Clear canvas appropriately based on video background
+            clearCanvas();
             
             // Draw visualization
             switch (currentViz) {
@@ -1443,10 +1605,8 @@
         // Initial idle animation
         function idleAnimation() {
             if (!isPlaying) {
-                ctx.fillStyle = document.body.classList.contains('light-mode') 
-                    ? 'rgba(245, 245, 247, 0.1)' 
-                    : 'rgba(10, 10, 15, 0.1)';
-                ctx.fillRect(0, 0, canvas.width, canvas.height);
+                // Clear canvas appropriately
+                clearCanvas();
                 
                 const time = Date.now() * 0.001;
                 const centerX = canvas.width / 2;
@@ -1468,5 +1628,4 @@
         idleAnimation();
     </script>
 </body>
-
 </html>
